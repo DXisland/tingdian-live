@@ -73,6 +73,21 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;inset:0;backgrou
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
 @keyframes pop{from{transform:translateY(-8px);opacity:0}to{transform:translateY(0);opacity:1}}
 
+/* Teleprompter */
+#prompter{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 48px);z-index:3;height:44vh;display:none;flex-direction:column;margin:0 10px;border-radius:12px;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.1);overflow:hidden;touch-action:none}
+#prompter.on{display:flex}
+#prompterDrag{flex:none;height:30px;display:flex;align-items:center;justify-content:center;cursor:grab;color:rgba(255,255,255,.45);font-size:16px;letter-spacing:4px}
+#prompterDrag:active{cursor:grabbing}
+#prompterText{flex:1;width:100%;background:transparent;border:none;color:#fff;font-size:18px;line-height:1.8;padding:8px 14px;outline:none;resize:none;overflow-y:auto;font-family:inherit}
+#prompterText::placeholder{color:rgba(255,255,255,.3)}
+#prompterCtrl{flex:none;display:flex;align-items:center;gap:10px;padding:6px 12px;border-top:1px solid rgba(255,255,255,.08)}
+#prompterCtrl button{background:none;border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:4px 12px;font-size:12px;pointer-events:auto}
+#prompterCtrl button:active{opacity:.55}
+#prompterCtrl button.on{border-color:rgba(0,229,255,.6);color:#00e5ff}
+#prompterCtrl .speed{font-size:11px;color:rgba(255,255,255,.5);font-variant-numeric:tabular-nums;min-width:40px;text-align:center}
+#prompterScroll{position:absolute;bottom:40px;left:0;right:0;height:60px;background:linear-gradient(transparent,rgba(0,0,0,.7));pointer-events:none;display:none}
+#prompterScroll.on{display:block}
+
 #cover{position:fixed;inset:0;z-index:10;background:radial-gradient(120% 100% at 50% 0%,#0b1a2e 0%,#03060b 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px 26px;text-align:center;overflow-y:auto}
 #cover::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(0,229,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.05) 1px,transparent 1px);background-size:26px 26px;mask-image:radial-gradient(90% 90% at 50% 30%,#000 0%,transparent 100%)}
 #cover>*{position:relative}
@@ -110,11 +125,27 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;inset:0;backgrou
 </div>
 <canvas id="overlay"></canvas>
 
+<div id="prompter">
+  <div id="prompterDrag">— — —</div>
+  <textarea id="prompterText" placeholder="在此输入或粘贴提示词…"></textarea>
+  <div id="prompterCtrl">
+    <button id="prompterFontDown">A-</button>
+    <button id="prompterFontUp">A+</button>
+    <button id="prompterSpeedDown">慢</button>
+    <span class="speed" id="prompterSpeedTxt">1x</span>
+    <button id="prompterSpeedUp">快</button>
+    <button id="prompterAutoScroll">自动滚动</button>
+    <button id="prompterClose">关闭</button>
+  </div>
+  <div id="prompterScroll"></div>
+</div>
+
 <div id="hud">
   <div id="hudTop">
     <span class="chip" id="modeChip">半身取景 <span class="dot"></span></span>
     <span class="chip btn" id="zoomChip">1.0x</span>
     <div class="right">
+      <span class="chip btn" id="prompterBtn">提示词</span>
       <span class="chip btn" id="guideBtn">辅助线</span>
       <span class="chip btn" id="calBtn">校准</span>
     </div>
@@ -157,6 +188,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;inset:0;backgrou
     <div class="feat"><i></i><div><b>黄金分割辅助线</b>：近景 / 半身 / 全身，主体对齐画面 0.618 处</div></div>
     <div class="feat"><i></i><div><b>亮度 / 水平</b>：仅在需要调整时提示，分区域弹出不重叠</div></div>
     <div class="feat"><i></i><div><b>人声检测</b>：收声太小实时提示，自动降噪</div></div>
+    <div class="feat"><i></i><div><b>提示词</b>：拍摄时显示台词，支持自动滚动</div></div>
     <div class="feat"><i></i><div><b>镜像 / 垂直翻转</b>，支持录像与拍照，导出 MP4 高清视频</div></div>
   </div>
   <button id="startBtn">开 启 摄 像 头</button>
@@ -183,11 +215,13 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;inset:0;backgrou
 var $=function(id){return document.getElementById(id)};
 var v=$('video'),ov=$('overlay'),octx=ov.getContext('2d');
 var isIOS=/iP(hone|ad|od)/.test(navigator.userAgent);
+
 var MODES={
-  full:{label:'全身',head:.353,r:.041,neck:.418,sh:.47,shl:.115,waist:.62,waistW:.062,hip:.69,hipW:.075,knee:.78,kneeW:.10,foot:.93,footW:.125,armEnd:.62},
-  half:{label:'半身',head:.54,r:.08,neck:.634,sh:.68,shl:.16,torsoEnd:.82,torsoW:.09,armEnd:.80},
-  closeup:{label:'近景',head:.54,r:.12,neck:.66,sh:.71,shl:.20,torsoEnd:.80,torsoW:.12,armEnd:.78}
+  full:{label:'全身',head:.30,r:.04,neck:.37,sh:.43,shl:.105,hip:.58,hipW:.058,knee:.72,kneeW:.048,foot:.91,footW:.07,waist:.58,waistW:.052,armEnd:.56},
+  half:{label:'半身',head:.42,r:.09,neck:.525,sh:.57,shl:.155,torsoEnd:.80,torsoW:.085,armEnd:.78},
+  closeup:{label:'近景',head:.42,r:.13,neck:.56,sh:.61,shl:.20,torsoEnd:.78,torsoW:.115,armEnd:.76}
 };
+
 var S={
   stream:null,front:true,flipH:true,flipV:false,mode:'half',shoot:'video',
   recording:false,recorder:null,chunks:[],recMime:'',recStart:0,recTimer:null,flipClean:null,
@@ -195,8 +229,10 @@ var S={
   tilt:0,gTilt:0,zoom:1,brightBad:false,tiltBad:false,offset:20,graceUntil:0
 };
 var tiltData={ready:false,beta:90,gamma:0,count:0,sumB:0,sumG:0};
+var gammaBuf=[],gammaSmoothed=0;
 var lastWarn={},lowStart=null,lowLatch=false;
 
+/* Toast */
 function toast(msg,type){
   var t=document.createElement('div');
   t.className='toast '+(type||'');
@@ -220,6 +256,7 @@ function showWarn(zone,msg,type,ms){
   el._t=setTimeout(function(){el.classList.remove('on')},ms||3500);
 }
 
+/* Zoom */
 function setZoom(z){
   S.zoom=Math.min(2.5,Math.max(1,z));
   $('zoomChip').textContent=S.zoom.toFixed(1)+'x';
@@ -229,6 +266,7 @@ function applyFlip(){
   v.style.transform='translate(-50%,-50%) scaleX('+(S.flipH?-1:1)+') scaleY('+(S.flipV?-1:1)+') scale('+S.zoom+')';
 }
 
+/* Camera */
 function startCamera(){
   var vc={facingMode:S.front?'user':'environment',width:{ideal:1920,max:2560},height:{ideal:1080,max:1440}};
   return navigator.mediaDevices.getUserMedia({
@@ -271,6 +309,7 @@ function switchCamera(){
   }).catch(function(){toast('切换摄像头失败','bad')});
 }
 
+/* Brightness */
 function sampleBrightness(){
   if(!S.stream||!v.videoWidth)return;
   var bc=document.getElementById('brightCanvas');
@@ -294,6 +333,7 @@ function sampleBrightness(){
   else if(S.brightBad){S.brightBad=false;showWarn('warnBright','亮度正常','good',1200)}
 }
 
+/* Audio */
 function sampleAudio(){
   if(!S.analyser)return;
   var buf=new Uint8Array(S.analyser.fftSize);
@@ -325,6 +365,7 @@ function sampleAudio(){
   if(db>-6)warnOnce('clip','声音过大失真：请离远一点','warn');
 }
 
+/* Tilt (gyroscope) */
 function onOrient(e){
   if(!S.ready)return;
   if(e.beta===null||e.gamma===null)return;
@@ -336,15 +377,30 @@ function onOrient(e){
         tiltData.gamma=tiltData.sumG/tiltData.count;
         tiltData.ready=true;
         S.graceUntil=Date.now()+4000;
+        gammaBuf=[];gammaSmoothed=0;
       }
     }
     return;
   }
   var tilt=(e.beta-tiltData.beta)-S.offset;
   if(tilt>180)tilt-=360;if(tilt<-180)tilt+=360;
-  var gTilt=e.gamma-tiltData.gamma;
-  S.tilt=tilt;S.gTilt=gTilt;
+
+  var gRaw=e.gamma-tiltData.gamma;
+  gammaBuf.push(gRaw);
+  if(gammaBuf.length>20)gammaBuf.shift();
+  var gSum=0;for(var i=0;i<gammaBuf.length;i++)gSum+=gammaBuf[i];
+  gammaSmoothed=gSum/gammaBuf.length;
+
+  S.tilt=tilt;S.gTilt=gammaSmoothed;
   updateTiltHUD();
+}
+function resetGyro(){
+  tiltData.ready=false;tiltData.count=0;tiltData.sumB=0;tiltData.sumG=0;
+  gammaBuf=[];gammaSmoothed=0;
+  showWarn('warnTilt','陀螺仪重置中，保持手机平正 3 秒…','warn',3200);
+  setTimeout(function(){
+    if(tiltData.ready){S.offset=0;S.graceUntil=Date.now()+3000;toast('陀螺仪已重置','good');}
+  },3200);
 }
 function updateTiltHUD(){
   if(!tiltData.ready)return;
@@ -361,14 +417,15 @@ function updateTiltHUD(){
   }else if(t>15){
     msg='手机偏高 '+t+'°：15°内属正常，请放平';
     type='warn';
-  }else if(g>10||g<-10){
-    msg='手机左右歪斜 '+g+'°，请扶正手机';
+  }else if(g>15||g<-15){
+    msg='手机左右歪斜 '+Math.abs(g)+'°，请扶正手机';
     type='warn';
   }
   if(msg){showWarn('warnTilt',msg,type);S.tiltBad=true}
   else if(S.tiltBad){S.tiltBad=false;showWarn('warnTilt','手机水平正常','good',1200)}
 }
 
+/* Drawing helpers */
 function strokePath(c,fn,opt){
   opt=opt||{};
   c.save();
@@ -381,6 +438,8 @@ function strokePath(c,fn,opt){
   fn();c.stroke();
   c.restore();
 }
+
+/* Overlay: figure guides */
 function drawOverlay(){
   var w=ov.clientWidth,h=ov.clientHeight,dpr=window.devicePixelRatio||1;
   if(!w||!h)return;
@@ -389,38 +448,82 @@ function drawOverlay(){
   c.setTransform(dpr,0,0,dpr,0,0);
   c.clearRect(0,0,w,h);
   if(!S.guides)return;
-  var cx=w/2,i;
+  var cx=w/2;
+
+  /* center line */
   c.save();c.setLineDash([5,9]);c.lineWidth=1;c.strokeStyle='rgba(0,229,255,.3)';
   c.beginPath();c.moveTo(cx,0);c.lineTo(cx,h);c.stroke();c.restore();
+
   var m=MODES[S.mode];
   var hy=m.head*h,r=m.r*h,neckY=m.neck*h,shY=m.sh*h,shw=m.shl*w;
-  var wy=(m.waist||m.torsoEnd||m.bottom)*h,ww=(m.waistW||m.torsoW||shw*0.5)*w;
-  c.save();c.setLineDash([5,6]);c.lineCap='round';
-  c.strokeStyle='rgba(0,8,16,.6)';c.lineWidth=7;
-  c.beginPath();c.arc(cx,hy,r,0,Math.PI*2);c.stroke();
-  c.strokeStyle='#00e5ff';c.lineWidth=2;c.shadowColor='rgba(0,229,255,.95)';c.shadowBlur=10;
-  c.beginPath();c.arc(cx,hy,r,0,Math.PI*2);c.stroke();
+
+  /* Head: filled glow + stroke */
+  c.save();
+  c.setLineDash([]);
+  var hg=c.createRadialGradient(cx,hy,0,cx,hy,r*1.6);
+  hg.addColorStop(0,'rgba(0,229,255,.12)');hg.addColorStop(1,'rgba(0,229,255,0)');
+  c.fillStyle=hg;c.beginPath();c.arc(cx,hy,r*1.6,0,Math.PI*2);c.fill();
+  strokePath(c,function(){
+    c.beginPath();c.arc(cx,hy,r,0,Math.PI*2);
+  },{w:2,dash:[4,5],glow:10});
   c.restore();
-  strokePath(c,function(){c.beginPath();c.moveTo(cx,hy+r*0.92);c.lineTo(cx,neckY)},{w:1.5});
-  strokePath(c,function(){c.beginPath();c.moveTo(cx-shw,shY);c.quadraticCurveTo(cx,shY+shw*0.22,cx+shw,shY)},{w:2});
-  strokePath(c,function(){c.beginPath();c.moveTo(cx-shw,shY);c.lineTo(cx-ww,wy)},{w:1.8});
-  strokePath(c,function(){c.beginPath();c.moveTo(cx+shw,shY);c.lineTo(cx+ww,wy)},{w:1.8});
-  var ay=(m.armEnd||wy)*h,aw=ww*0.9;
+
+  /* Neck */
   strokePath(c,function(){
-    c.beginPath();c.moveTo(cx-shw,shY);c.quadraticCurveTo(cx-shw*1.1,shY+(ay-shY)*0.55,cx-aw*1.2,ay);
+    c.beginPath();c.moveTo(cx,hy+r*0.88);c.lineTo(cx,neckY);
+  },{w:1.5});
+
+  /* Shoulders: smooth curve */
+  strokePath(c,function(){
+    c.beginPath();
+    c.moveTo(cx-shw,shY-shw*0.06);
+    c.quadraticCurveTo(cx,shY+shw*0.18,cx+shw,shY-shw*0.06);
+  },{w:2});
+
+  /* Torso sides */
+  strokePath(c,function(){
+    c.beginPath();
+    c.moveTo(cx-shw,shY);
+    c.quadraticCurveTo(cx-shw*0.75,(shY+wy)*0.52,cx-ww,wy);
+  },{w:1.8});
+  strokePath(c,function(){
+    c.beginPath();
+    c.moveTo(cx+shw,shY);
+    c.quadraticCurveTo(cx+shw*0.75,(shY+wy)*0.52,cx+ww,wy);
+  },{w:1.8});
+
+  /* Arms: natural curve from shoulder */
+  var ay=(m.armEnd||wy)*h,aw=ww*0.85;
+  strokePath(c,function(){
+    c.beginPath();
+    c.moveTo(cx-shw,shY);
+    c.bezierCurveTo(cx-shw*1.15,shY+(ay-shY)*0.35,cx-aw*1.3,shY+(ay-shY)*0.7,cx-aw*1.1,ay);
   },{w:1.5,glow:7});
   strokePath(c,function(){
-    c.beginPath();c.moveTo(cx+shw,shY);c.quadraticCurveTo(cx+shw*1.1,shY+(ay-shY)*0.55,cx+aw*1.2,ay);
+    c.beginPath();
+    c.moveTo(cx+shw,shY);
+    c.bezierCurveTo(cx+shw*1.15,shY+(ay-shY)*0.35,cx+aw*1.3,shY+(ay-shY)*0.7,cx+aw*1.1,ay);
   },{w:1.5,glow:7});
+
+  /* Legs (full mode) */
   if(m.hip&&m.knee&&m.foot){
     var hipY=m.hip*h,hipW=m.hipW*w,kneeY=m.knee*h,kneeW=m.kneeW*w,footY=m.foot*h,footW=m.footW*w;
     strokePath(c,function(){
-      c.beginPath();c.moveTo(cx-hipW,hipY);c.lineTo(cx-kneeW,kneeY);c.lineTo(cx-footW,footY);
-      c.moveTo(cx+hipW,hipY);c.lineTo(cx+kneeW,kneeY);c.lineTo(cx+footW,footY);
+      c.beginPath();
+      c.moveTo(cx-hipW,hipY);
+      c.quadraticCurveTo(cx-hipW*0.95,(hipY+kneeY)*0.5,cx-kneeW,kneeY);
+      c.lineTo(cx-footW,footY);
+    },{w:1.8});
+    strokePath(c,function(){
+      c.beginPath();
+      c.moveTo(cx+hipW,hipY);
+      c.quadraticCurveTo(cx+hipW*0.95,(hipY+kneeY)*0.5,cx+kneeW,kneeY);
+      c.lineTo(cx+footW,footY);
     },{w:1.8});
   }
 }
 
+/* Canvas drawFrame */
 function drawFrame(c,cw,ch){
   var vw=v.videoWidth,vh=v.videoHeight;
   if(!vw)return;
@@ -433,6 +536,8 @@ function drawFrame(c,cw,ch){
   c.drawImage(v,-fw/2,-fh/2,fw,fh);
   c.restore();
 }
+
+/* Recording */
 function buildRecordStream(){
   var cn=document.createElement('canvas');cn.width=720;cn.height=1280;
   var cc=cn.getContext('2d'),raf=null;
@@ -509,6 +614,8 @@ function takePhoto(){
   cn.toBlob(function(b){if(b)showSheet('photo',b)},'image/jpeg',0.93);
   navigator.vibrate&&navigator.vibrate(15);
 }
+
+/* Result sheet */
 function showSheet(kind,blob){
   var ext=(kind==='video'&&blob.type.indexOf('webm')>=0)?'.webm':(kind==='photo'?'.jpg':'.mp4');
   var name=kind==='photo'?('photo_'+Date.now()+'.jpg'):('video_'+Date.now()+ext);
@@ -550,6 +657,7 @@ function fallbackSave(blob,name){
   toast(isIOS?'若未开始保存，请长按画面，选择「存储」':'已开始保存，请在下载中查看','good');
 }
 
+/* Wake lock */
 function requestWakeLock(){
   try{
     if(!navigator.wakeLock)return;
@@ -562,6 +670,33 @@ function requestWakeLock(){
   }catch(e){}
 }
 
+/* Teleprompter */
+var prompter={fontSize:18,speed:1,autoScroll:false,raf:null,scrollTop:0};
+function togglePrompter(){
+  var el=$('prompter');
+  var isOn=el.classList.toggle('on');
+  $('prompterBtn').style.opacity=isOn?'1':'.45';
+  if(isOn&&prompter.autoScroll)startPrompterScroll();
+  else stopPrompterScroll();
+}
+function startPrompterScroll(){
+  stopPrompterScroll();
+  var ta=$('prompterText');
+  function tick(){
+    if(!prompter.autoScroll||!$('prompter').classList.contains('on'))return;
+    ta.scrollTop+=prompter.speed*0.8;
+    if(ta.scrollTop>=ta.scrollHeight-ta.clientHeight){
+      ta.scrollTop=0;
+    }
+    prompter.raf=requestAnimationFrame(tick);
+  }
+  prompter.raf=requestAnimationFrame(tick);
+}
+function stopPrompterScroll(){
+  if(prompter.raf){cancelAnimationFrame(prompter.raf);prompter.raf=null}
+}
+
+/* Events */
 document.addEventListener('touchmove',function(e){
   var el=e.target;
   if(el&&(el.tagName==='VIDEO'||(el.closest&&el.closest('#cam,#cover'))))return;
@@ -569,6 +704,7 @@ document.addEventListener('touchmove',function(e){
 },{passive:false});
 window.addEventListener('deviceorientation',onOrient);
 
+/* Pinch zoom */
 (function(){
   var cam=$('cam'),d0=0,z0=1;
   cam.addEventListener('touchstart',function(e){
@@ -585,6 +721,7 @@ window.addEventListener('deviceorientation',onOrient);
   },{passive:true});
 })();
 
+/* Start button */
 $('startBtn').addEventListener('click',function(){
   if(window.isSecureContext===false){
     $('errCard').style.display='block';
@@ -617,6 +754,7 @@ $('startBtn').addEventListener('click',function(){
   });
 });
 
+/* Seg / modes */
 $('segPhoto').addEventListener('click',function(){
   if(S.recording)return;
   S.shoot='photo';
@@ -637,6 +775,8 @@ document.querySelectorAll('#modes button').forEach(function(b){
     $('modeChip').childNodes[0].textContent=MODES[S.mode].label+'取景 ';
   });
 });
+
+/* Shutter / flip / zoom / guide */
 $('shutter').addEventListener('click',function(){
   if(S.shoot==='photo')takePhoto();
   else if(S.recording)stopRecord();
@@ -650,13 +790,64 @@ $('guideBtn').addEventListener('click',function(){
   $('guideBtn').style.opacity=S.guides?'1':'.45';
   toast(S.guides?'辅助线已开启':'辅助线已关闭',S.guides?'good':'');
 });
-$('calBtn').addEventListener('click',function(){
-  tiltData.ready=false;tiltData.count=0;tiltData.sumB=0;tiltData.sumG=0;
-  showWarn('warnTilt','校准中，请保持手机平正 3 秒…','warn',3200);
-  setTimeout(function(){
-    if(tiltData.ready){S.offset=0;S.graceUntil=Date.now()+3000;toast('已校准，当前姿势为0°','good');}
-  },3200);
+
+/* Calibrate / reset gyro */
+$('calBtn').addEventListener('click',resetGyro);
+
+/* Teleprompter controls */
+$('prompterBtn').addEventListener('click',togglePrompter);
+$('prompterClose').addEventListener('click',function(){
+  $('prompter').classList.remove('on');
+  $('prompterBtn').style.opacity='.45';
+  stopPrompterScroll();
+  prompter.autoScroll=false;
+  $('prompterAutoScroll').classList.remove('on');
 });
+$('prompterFontUp').addEventListener('click',function(){
+  prompter.fontSize=Math.min(36,prompter.fontSize+2);
+  $('prompterText').style.fontSize=prompter.fontSize+'px';
+});
+$('prompterFontDown').addEventListener('click',function(){
+  prompter.fontSize=Math.max(12,prompter.fontSize-2);
+  $('prompterText').style.fontSize=prompter.fontSize+'px';
+});
+$('prompterSpeedUp').addEventListener('click',function(){
+  prompter.speed=Math.min(5,prompter.speed+0.5);
+  $('prompterSpeedTxt').textContent=prompter.speed+'x';
+});
+$('prompterSpeedDown').addEventListener('click',function(){
+  prompter.speed=Math.max(0.5,prompter.speed-0.5);
+  $('prompterSpeedTxt').textContent=prompter.speed+'x';
+});
+$('prompterAutoScroll').addEventListener('click',function(){
+  prompter.autoScroll=!prompter.autoScroll;
+  $('prompterAutoScroll').classList.toggle('on',prompter.autoScroll);
+  if(prompter.autoScroll)startPrompterScroll();
+  else stopPrompterScroll();
+});
+
+/* Drag teleprompter */
+(function(){
+  var drag=$('prompterDrag'),panel=$('prompter'),startY=0,startTop=0,dragging=false;
+  drag.addEventListener('touchstart',function(e){
+    if(e.touches.length!==1)return;
+    dragging=true;
+    startY=e.touches[0].clientY;
+    var cs=getComputedStyle(panel);
+    startTop=parseInt(cs.top)||0;
+    e.preventDefault();
+  },{passive:false});
+  document.addEventListener('touchmove',function(e){
+    if(!dragging)return;
+    var dy=e.touches[0].clientY-startY;
+    var newTop=Math.max(48,Math.min(window.innerHeight*0.6,startTop+dy));
+    panel.style.top=newTop+'px';
+    e.preventDefault();
+  },{passive:false});
+  document.addEventListener('touchend',function(){dragging=false});
+})();
+
+/* Visibility / unload */
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState==='hidden'&&S.recording){
     stopRecord();
@@ -667,6 +858,7 @@ window.addEventListener('beforeunload',function(e){
   if(S.recording){e.preventDefault();e.returnValue='正在录像，确定离开?'}
 });
 
+/* Render loop */
 function loop(){
   drawOverlay();
   requestAnimationFrame(loop);
