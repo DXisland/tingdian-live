@@ -377,7 +377,7 @@ function onOrient(e){
         tiltData.beta=tiltData.sumB/tiltData.count;
         tiltData.gamma=tiltData.sumG/tiltData.count;
         tiltData.ready=true;
-        S.graceUntil=Date.now()+4000;
+        S.graceUntil=Date.now()+2500;
         /* bootstrap smoothing to baseline so initial tilt = 0 */
         tiltSmooth.beta=tiltData.beta;
         tiltSmooth.gamma=tiltData.gamma;
@@ -414,7 +414,6 @@ function updateTiltHUD(){
   if(Date.now()<S.graceUntil)return;
   var t=Math.round(S.tilt),g=Math.round(S.gTilt);
   var msg=null,type='bad';
-  /* dead zones: ±3° ignored */
   if(t<-8){
     msg='手机偏低：请抬高手机，镜头与脸同高，防止仰拍变形';
   }else if(t<-3){
@@ -432,17 +431,8 @@ function updateTiltHUD(){
     msg='手机轻微歪斜，请扶正';
     type='warn';
   }
-  /* sustained deviation: only warn after 2s continuous */
-  if(msg){
-    clearTimeout(tiltWarnTimer);
-    tiltWarnTimer=setTimeout(function(){
-      showWarn('warnTilt',msg,type);
-      S.tiltBad=true;
-    },2000);
-  }else{
-    clearTimeout(tiltWarnTimer);
-    if(S.tiltBad){S.tiltBad=false;showWarn('warnTilt','手机水平正常','good',1200)}
-  }
+  if(msg){showWarn('warnTilt',msg,type);S.tiltBad=true}
+  else if(S.tiltBad){S.tiltBad=false;showWarn('warnTilt','手机水平正常','good',1200)}
 }
 
 /* Drawing helpers */
