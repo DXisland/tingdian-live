@@ -229,7 +229,8 @@ var S={
   tilt:0,gTilt:0,zoom:1,brightBad:false,tiltBad:false,offset:20,graceUntil:0
 };
 var tiltData={ready:false,beta:90,gamma:0,count:0,sumB:0,sumG:0};
-var gammaBuf=[],gammaSmoothed=0;
+var tiltSmooth={beta:0,gamma:0,bootstrapped:false};
+var tiltWarnTimer=null;
 var lastWarn={},lowStart=null,lowLatch=false;
 
 /* Toast */
@@ -365,7 +366,7 @@ function sampleAudio(){
   if(db>-6)warnOnce('clip','声音过大失真：请离远一点','warn');
 }
 
-/* Tilt (gyroscope) */
+/* Tilt (gyroscope) - exponential smoothing with dead zones & sustained detection */
 function onOrient(e){
   if(!S.ready)return;
   if(e.beta===null||e.gamma===null)return;
@@ -377,26 +378,32 @@ function onOrient(e){
         tiltData.gamma=tiltData.sumG/tiltData.count;
         tiltData.ready=true;
         S.graceUntil=Date.now()+4000;
-        gammaBuf=[];gammaSmoothed=0;
+        /* bootstrap smoothing to baseline so initial tilt = 0 */
+        tiltSmooth.beta=tiltData.beta;
+        tiltSmooth.gamma=tiltData.gamma;
+        tiltSmooth.bootstrapped=true;
       }
     }
     return;
   }
-  var tilt=(e.beta-tiltData.beta)-S.offset;
+  /* exponential smoothing: alpha=0.04 -> very heavy filtering (~25 samples) */
+  var alpha=0.04;
+  if(!tiltSmooth.bootstrapped){
+    tiltSmooth.beta=e.beta;tiltSmooth.gamma=e.gamma;tiltSmooth.bootstrapped=true;
+  }else{
+    tiltSmooth.beta=tiltSmooth.beta*(1-alpha)+e.beta*alpha;
+    tiltSmooth.gamma=tiltSmooth.gamma*(1-alpha)+e.gamma*alpha;
+  }
+  var tilt=(tiltSmooth.beta-tiltData.beta)-S.offset;
   if(tilt>180)tilt-=360;if(tilt<-180)tilt+=360;
-
-  var gRaw=e.gamma-tiltData.gamma;
-  gammaBuf.push(gRaw);
-  if(gammaBuf.length>20)gammaBuf.shift();
-  var gSum=0;for(var i=0;i<gammaBuf.length;i++)gSum+=gammaBuf[i];
-  gammaSmoothed=gSum/gammaBuf.length;
-
-  S.tilt=tilt;S.gTilt=gammaSmoothed;
+  var gTilt=tiltSmooth.gamma-tiltData.gamma;
+  S.tilt=tilt;S.gTilt=gTilt;
   updateTiltHUD();
 }
 function resetGyro(){
   tiltData.ready=false;tiltData.count=0;tiltData.sumB=0;tiltData.sumG=0;
-  gammaBuf=[];gammaSmoothed=0;
+  tiltSmooth.bootstrapped=false;
+  clearTimeout(tiltWarnTimer);
   showWarn('warnTilt','陀螺仪重置中，保持手机平正 3 秒…','warn',3200);
   setTimeout(function(){
     if(tiltData.ready){S.offset=0;S.graceUntil=Date.now()+3000;toast('陀螺仪已重置','good');}
@@ -407,22 +414,35 @@ function updateTiltHUD(){
   if(Date.now()<S.graceUntil)return;
   var t=Math.round(S.tilt),g=Math.round(S.gTilt);
   var msg=null,type='bad';
-  if(t<-5){
+  /* dead zones: ±3° ignored */
+  if(t<-8){
     msg='手机偏低：请抬高手机，镜头与脸同高，防止仰拍变形';
-  }else if(t<0){
+  }else if(t<-3){
     msg='手机偏低，请抬高手机';
     type='warn';
-  }else if(t>25){
+  }else if(t>20){
     msg='手机偏高：请降低手机并放平';
-  }else if(t>15){
-    msg='手机偏高 '+t+'°：15°内属正常，请放平';
+  }else if(t>12){
+    msg='手机偏高 '+t+'°：12°内属正常，请放平';
     type='warn';
-  }else if(g>15||g<-15){
+  }else if(g>18||g<-18){
     msg='手机左右歪斜 '+Math.abs(g)+'°，请扶正手机';
     type='warn';
+  }else if(g>10||g<-10){
+    msg='手机轻微歪斜，请扶正';
+    type='warn';
   }
-  if(msg){showWarn('warnTilt',msg,type);S.tiltBad=true}
-  else if(S.tiltBad){S.tiltBad=false;showWarn('warnTilt','手机水平正常','good',1200)}
+  /* sustained deviation: only warn after 2s continuous */
+  if(msg){
+    clearTimeout(tiltWarnTimer);
+    tiltWarnTimer=setTimeout(function(){
+      showWarn('warnTilt',msg,type);
+      S.tiltBad=true;
+    },2000);
+  }else{
+    clearTimeout(tiltWarnTimer);
+    if(S.tiltBad){S.tiltBad=false;showWarn('warnTilt','手机水平正常','good',1200)}
+  }
 }
 
 /* Drawing helpers */
