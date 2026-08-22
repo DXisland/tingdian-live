@@ -386,13 +386,13 @@ function onOrient(e){
     }
     return;
   }
-  /* exponential smoothing: alpha=0.04 -> very heavy filtering (~25 samples) */
+  /* exponential smoothing: beta alpha=0.04, gamma alpha=0.08 */
   var alpha=0.04;
   if(!tiltSmooth.bootstrapped){
     tiltSmooth.beta=e.beta;tiltSmooth.gamma=e.gamma;tiltSmooth.bootstrapped=true;
   }else{
     tiltSmooth.beta=tiltSmooth.beta*(1-alpha)+e.beta*alpha;
-    tiltSmooth.gamma=tiltSmooth.gamma*(1-alpha)+e.gamma*alpha;
+    tiltSmooth.gamma=tiltSmooth.gamma*(1-0.08)+e.gamma*0.08;
   }
   var tilt=(tiltSmooth.beta-tiltData.beta)-S.offset;
   if(tilt>180)tilt-=360;if(tilt<-180)tilt+=360;
@@ -402,11 +402,18 @@ function onOrient(e){
 }
 function resetGyro(){
   tiltData.ready=false;tiltData.count=0;tiltData.sumB=0;tiltData.sumG=0;
-  tiltSmooth.bootstrapped=false;
+  tiltSmooth.beta=0;tiltSmooth.gamma=0;tiltSmooth.bootstrapped=false;
   clearTimeout(tiltWarnTimer);
   showWarn('warnTilt','陀螺仪重置中，保持手机平正 3 秒…','warn',3200);
   setTimeout(function(){
-    if(tiltData.ready){S.offset=0;S.graceUntil=Date.now()+3000;toast('陀螺仪已重置','good');}
+    if(tiltData.ready){
+      S.offset=0;S.graceUntil=Date.now()+2500;
+      /* re-bootstrap: set smoothed = new baseline so tilt=0 */
+      tiltSmooth.beta=tiltData.beta;
+      tiltSmooth.gamma=tiltData.gamma;
+      tiltSmooth.bootstrapped=true;
+      toast('陀螺仪已重置','good');
+    }
   },3200);
 }
 function updateTiltHUD(){
@@ -424,11 +431,11 @@ function updateTiltHUD(){
   }else if(t>12){
     msg='手机偏高 '+t+'°：12°内属正常，请放平';
     type='warn';
-  }else if(g>18||g<-18){
+  }else if(g>15||g<-15){
     msg='手机左右歪斜 '+Math.abs(g)+'°，请扶正手机';
     type='warn';
-  }else if(g>10||g<-10){
-    msg='手机轻微歪斜，请扶正';
+  }else if(g>8||g<-8){
+    msg='手机轻微歪斜 '+Math.abs(g)+'°，请扶正';
     type='warn';
   }
   if(msg){showWarn('warnTilt',msg,type);S.tiltBad=true}
