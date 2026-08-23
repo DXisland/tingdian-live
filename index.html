@@ -132,7 +132,7 @@ html,body{width:100%;height:100%;overflow:hidden;position:fixed;inset:0;backgrou
     <button id="prompterFontDown">A-</button>
     <button id="prompterFontUp">A+</button>
     <button id="prompterSpeedDown">慢</button>
-    <span class="speed" id="prompterSpeedTxt">1x</span>
+    <span class="speed" id="prompterSpeedTxt">1.0x</span>
     <button id="prompterSpeedUp">快</button>
     <button id="prompterAutoScroll">自动滚动</button>
     <button id="prompterClose">关闭</button>
@@ -421,20 +421,20 @@ function updateTiltHUD(){
   if(Date.now()<S.graceUntil)return;
   var t=Math.round(S.tilt),g=Math.round(S.gTilt);
   var msg=null,type='bad';
-  if(t<-8){
+  if(t<-10){
     msg='手机偏低：请抬高手机，镜头与脸同高，防止仰拍变形';
-  }else if(t<-3){
+  }else if(t<-5){
     msg='手机偏低，请抬高手机';
     type='warn';
-  }else if(t>20){
+  }else if(t>25){
     msg='手机偏高：请降低手机并放平';
-  }else if(t>12){
-    msg='手机偏高 '+t+'°：12°内属正常，请放平';
+  }else if(t>15){
+    msg='手机偏高 '+t+'°：15°内属正常，请放平';
     type='warn';
-  }else if(g>15||g<-15){
+  }else if(g>18||g<-18){
     msg='手机左右歪斜 '+Math.abs(g)+'°，请扶正手机';
     type='warn';
-  }else if(g>8||g<-8){
+  }else if(g>12||g<-12){
     msg='手机轻微歪斜 '+Math.abs(g)+'°，请扶正';
     type='warn';
   }
@@ -844,12 +844,12 @@ $('prompterFontDown').addEventListener('click',function(){
   $('prompterText').style.fontSize=prompter.fontSize+'px';
 });
 $('prompterSpeedUp').addEventListener('click',function(){
-  prompter.speed=Math.min(5,prompter.speed+0.5);
-  $('prompterSpeedTxt').textContent=prompter.speed+'x';
+  prompter.speed=Math.round(Math.min(3,(prompter.speed+0.1)*10)/10);
+  $('prompterSpeedTxt').textContent=prompter.speed.toFixed(1)+'x';
 });
 $('prompterSpeedDown').addEventListener('click',function(){
-  prompter.speed=Math.max(0.5,prompter.speed-0.5);
-  $('prompterSpeedTxt').textContent=prompter.speed+'x';
+  prompter.speed=Math.round(Math.max(0.5,(prompter.speed-0.1)*10)/10);
+  $('prompterSpeedTxt').textContent=prompter.speed.toFixed(1)+'x';
 });
 $('prompterAutoScroll').addEventListener('click',function(){
   prompter.autoScroll=!prompter.autoScroll;
