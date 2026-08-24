@@ -226,7 +226,7 @@ var S={
   stream:null,front:true,flipH:true,flipV:false,mode:'half',shoot:'video',
   recording:false,recorder:null,chunks:[],recMime:'',recStart:0,recTimer:null,flipClean:null,
   guides:true,ready:false,actx:null,analyser:null,shake:false,
-  tilt:0,gTilt:0,zoom:1,brightBad:false,tiltBad:false,offset:20,graceUntil:0
+  tilt:0,gTilt:0,zoom:1,brightBad:false,tiltBad:false,offset:0,graceUntil:0
 };
 var tiltData={ready:false,beta:90,gamma:0,count:0,sumB:0,sumG:0};
 var tiltSmooth={beta:0,gamma:0,bootstrapped:false};
@@ -407,7 +407,7 @@ function resetGyro(){
   showWarn('warnTilt','陀螺仪重置中，保持手机平正 3 秒…','warn',3200);
   setTimeout(function(){
     if(tiltData.ready){
-      S.offset=0;S.graceUntil=Date.now()+2500;
+      S.graceUntil=Date.now()+2500;
       /* re-bootstrap: set smoothed = new baseline so tilt=0 */
       tiltSmooth.beta=tiltData.beta;
       tiltSmooth.gamma=tiltData.gamma;
@@ -426,15 +426,15 @@ function updateTiltHUD(){
   }else if(t<-5){
     msg='手机偏低，请抬高手机';
     type='warn';
-  }else if(t>25){
+  }else if(t>20){
     msg='手机偏高：请降低手机并放平';
-  }else if(t>15){
-    msg='手机偏高 '+t+'°：15°内属正常，请放平';
+  }else if(t>12){
+    msg='手机偏高 '+t+'°：12°内属正常，请放平';
     type='warn';
   }else if(g>18||g<-18){
     msg='手机左右歪斜 '+Math.abs(g)+'°，请扶正手机';
     type='warn';
-  }else if(g>12||g<-12){
+  }else if(g>10||g<-10){
     msg='手机轻微歪斜 '+Math.abs(g)+'°，请扶正';
     type='warn';
   }
