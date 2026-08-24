@@ -741,7 +741,7 @@ function requestWakeLock(){
 }
 
 /* Teleprompter */
-var prompter={fontSize:18,speed:1,autoScroll:false,raf:null,scrollTop:0};
+var prompter={fontSize:18,speed:10,autoScroll:false,raf:null,scrollTop:0};
 function togglePrompter(){
   var el=$('prompter');
   var isOn=el.classList.toggle('on');
@@ -754,7 +754,7 @@ function startPrompterScroll(){
   var ta=$('prompterText');
   function tick(){
     if(!prompter.autoScroll||!$('prompter').classList.contains('on'))return;
-    ta.scrollTop+=prompter.speed*0.8;
+    ta.scrollTop+=prompter.speed/10*0.8;
     if(ta.scrollTop>=ta.scrollHeight-ta.clientHeight){
       ta.scrollTop=0;
     }
@@ -882,12 +882,12 @@ $('prompterFontDown').addEventListener('click',function(){
   $('prompterText').style.fontSize=prompter.fontSize+'px';
 });
 $('prompterSpeedUp').addEventListener('click',function(){
-  prompter.speed=Math.round(Math.min(3,(prompter.speed+0.1)*10)/10);
-  $('prompterSpeedTxt').textContent=prompter.speed.toFixed(1)+'x';
+  prompter.speed=Math.min(30,prompter.speed+1);
+  $('prompterSpeedTxt').textContent=(prompter.speed/10).toFixed(1)+'x';
 });
 $('prompterSpeedDown').addEventListener('click',function(){
-  prompter.speed=Math.round(Math.max(0.5,(prompter.speed-0.1)*10)/10);
-  $('prompterSpeedTxt').textContent=prompter.speed.toFixed(1)+'x';
+  prompter.speed=Math.max(5,prompter.speed-1);
+  $('prompterSpeedTxt').textContent=(prompter.speed/10).toFixed(1)+'x';
 });
 $('prompterAutoScroll').addEventListener('click',function(){
   prompter.autoScroll=!prompter.autoScroll;
