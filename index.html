@@ -431,11 +431,8 @@ function updateTiltHUD(){
   }else if(t>12){
     msg='手机偏高 '+t+'°：12°内属正常，请放平';
     type='warn';
-  }else if(g>18||g<-18){
-    msg='手机左右歪斜 '+Math.abs(g)+'°，请扶正手机';
-    type='warn';
-  }else if(g>10||g<-10){
-    msg='手机轻微歪斜 '+Math.abs(g)+'°，请扶正';
+  }else if(g>25||g<-25){
+    msg='手机严重歪斜 '+Math.abs(g)+'°，请扶正手机';
     type='warn';
   }
   if(msg){showWarn('warnTilt',msg,type);S.tiltBad=true}
