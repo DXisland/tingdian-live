@@ -234,6 +234,21 @@ var tiltWarnTimer=null;
 var lastWarn={},lowStart=null,lowLatch=false;
 
 /* Toast */
+var lastSpeakKey='',lastSpeakTime=0;
+function speak(msg,key){
+  if(!window.speechSynthesis)return;
+  var now=Date.now();
+  if(key&&key===lastSpeakKey&&now-lastSpeakTime<4000)return;
+  lastSpeakKey=key||'';lastSpeakTime=now;
+  speechSynthesis.cancel();
+  var u=new SpeechSynthesisUtterance(msg);
+  u.lang='zh-CN';u.rate=1;u.pitch=1;u.volume=1;
+  var voices=speechSynthesis.getVoices();
+  for(var i=0;i<voices.length;i++){
+    if(voices[i].lang.indexOf('zh')>=0){u.voice=voices[i];break}
+  }
+  speechSynthesis.speak(u);
+}
 function toast(msg,type){
   var t=document.createElement('div');
   t.className='toast '+(type||'');
@@ -435,7 +450,9 @@ function updateTiltHUD(){
     msg='手机严重歪斜 '+Math.abs(g)+'°，请扶正手机';
     type='warn';
   }
-  if(msg){showWarn('warnTilt',msg,type);S.tiltBad=true}
+  if(msg){showWarn('warnTilt',msg,type);S.tiltBad=true;
+    if(type==='bad')speak(msg,'tilt');
+  }
   else if(S.tiltBad){S.tiltBad=false;showWarn('warnTilt','手机水平正常','good',1200)}
 }
 
@@ -585,6 +602,30 @@ function pickMime(){
   return '';
 }
 function startRecord(){
+  if(S.recording||!S.stream)return;
+  $('shutter').disabled=true;
+  /* countdown 3-2-1 */
+  var cd=document.createElement('div');
+  cd.style.cssText='position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;font-size:80px;font-weight:900;color:#fff;text-shadow:0 0 40px rgba(0,229,255,.8),0 0 80px rgba(0,229,255,.4);pointer-events:none;';
+  document.body.appendChild(cd);
+  var nums=['3','2','1'];
+  var idx=0;
+  function tick(){
+    if(idx>=nums.length){
+      cd.remove();
+      $('shutter').disabled=false;
+      doStartRecord();
+      return;
+    }
+    cd.textContent=nums[idx];
+    navigator.vibrate&&navigator.vibrate(20);
+    speak(nums[idx],'cd'+idx);
+    idx++;
+    setTimeout(tick,900);
+  }
+  tick();
+}
+function doStartRecord(){
   if(S.recording||!S.stream)return;
   S.chunks=[];
   S.recMime=pickMime();
