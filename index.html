@@ -754,10 +754,12 @@ function startPrompterScroll(){
   var ta=$('prompterText');
   function tick(){
     if(!prompter.autoScroll||!$('prompter').classList.contains('on'))return;
-    ta.scrollTop+=prompter.speed/10*0.8;
     if(ta.scrollTop>=ta.scrollHeight-ta.clientHeight){
-      ta.scrollTop=0;
+      prompter.autoScroll=false;
+      $('prompterAutoScroll').classList.remove('on');
+      return;
     }
+    ta.scrollTop+=prompter.speed/10*0.8;
     prompter.raf=requestAnimationFrame(tick);
   }
   prompter.raf=requestAnimationFrame(tick);
